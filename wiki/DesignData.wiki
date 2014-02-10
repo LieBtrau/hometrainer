@@ -8,4 +8,5 @@
  This version solves the issues of the version 0 PCB.
   
  * It's not code-compatible.  Two GPIO lines of the MCU have been switched because it was easier to rout the tracks on the PCB.
+ * There's an extra ISP connector on the board because the Arduino Mini can no longer be programmed using its bootloader.  Some fuse settings also need to be changed and that can't be done with the bootloader.
  * [https://drive.google.com/file/d/0B5_mAlpV8IjvdmRJRzhJOWV1aTg/edit?usp=sharing PDF]
