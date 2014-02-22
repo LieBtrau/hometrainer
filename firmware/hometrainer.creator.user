@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 2.8.1, 2013-11-23T18:04:18. -->
+<!-- Written by QtCreator 2.8.1, 2014-02-22T13:29:09. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -108,7 +108,7 @@
      <valuemap type="QVariantMap" key="ProjectExplorer.BuildStepList.Step.0">
       <valuelist type="QVariantList" key="GenericProjectManager.GenericMakeStep.BuildTargets"/>
       <value type="bool" key="GenericProjectManager.GenericMakeStep.Clean">false</value>
-      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments">raw_upload</value>
+      <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeArguments">ispload</value>
       <value type="QString" key="GenericProjectManager.GenericMakeStep.MakeCommand"></value>
       <value type="bool" key="ProjectExplorer.BuildStep.Enabled">true</value>
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Make</value>

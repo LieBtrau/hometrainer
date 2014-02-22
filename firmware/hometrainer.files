@@ -7,3 +7,9 @@ hometrainer.ino
 makefile
 ttimer.h
 ttimer.cpp
+LiquidCrystal.h
+LiquidCrystal.cpp
+lcdcontrol.h
+lcdcontrol.cpp
+stopwatch.h
+stopwatch.cpp
