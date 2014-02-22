@@ -1,14 +1,27 @@
 #include <Arduino.h>
-//Modified LiquidCrystal.h
-//Added "delayMicroseconds(2000);" as last instruction in  void LiquidCrystal::send(uint8_t value, uint8_t mode)
 
 #include "Bounce.h"
-#include <LiquidCrystal.h>
 #include <avr/sleep.h>
 #include <EEPROM.h>
 #include "EEPROMAnything.h"
 #include "hometrainer.h"
 #include "ttimer.h"
+#include "lcdcontrol.h"
+#include "stopwatch.h"
+
+#define sleep_bod_disable() \
+{ \
+uint8_t tempreg; \
+__asm__ __volatile__("in %[tempreg], %[mcucr]" "\n\t" \
+"ori %[tempreg], %[bods_bodse]" "\n\t" \
+"out %[mcucr], %[tempreg]" "\n\t" \
+"andi %[tempreg], %[not_bodse]" "\n\t" \
+"out %[mcucr], %[tempreg]" \
+: [tempreg] "=&d" (tempreg) \
+: [mcucr] "I" _SFR_IO_ADDR(MCUCR), \
+[bods_bodse] "i" (_BV(BODS) | _BV(BODSE)), \
+[not_bodse] "i" (~_BV(BODSE))); \
+};
 
 struct config_t
 {
@@ -17,113 +30,84 @@ struct config_t
 configuration;
 
 const byte yPinTrigger=2;
-const byte yPinButton=4;
-const byte yPinClearMem=5;
-const byte EXTINT1=1;
+const byte yPinClearMem=12;
+const byte yPinButton=13;
+const byte EXTINT1=1;   //IO3 of Arduino Mini connected to EXTINT1
 const word DISPLAY_ON_TIME=30000;
 
-LiquidCrystal lcd(23, 25, 27, 29, 31, 33, 35);
+lcdControl lcdc(4);
 Bounce boPinTrigger(yPinTrigger, 50);
 Bounce boPinButton(yPinButton, 50);
 Bounce boPinClearMem(yPinClearMem, 50);
 TTimer ttClearRPM(5000);
 TTimer ttClearDisplay(DISPLAY_ON_TIME);
+StopWatch chrono(StopWatch::SECONDS);
 
 void setup()
 {
-    Serial.begin(9600);
     pinMode(yPinTrigger, INPUT_PULLUP);
     pinMode(yPinButton, INPUT_PULLUP);
     pinMode(yPinClearMem, INPUT_PULLUP);
     if(!EEPROM_readAnything(0,configuration)){
-        Serial.println("EEPROM data is corrupt, writing new data.");
         EEPROM_writeAnything(0,configuration);
     }
-    Serial.print("Total time: ");
-    Serial.println(configuration.ulTotalTime, DEC);
+    //set low power
+    bitClear(SPCR,SPE);     //disable SPI
+    bitClear(TWCR,TWEN);    //disable TWI
+    bitSet(ACSR,ACD);       //power off analog comparator
+    bitClear(ADCSRA,ADEN);  //disable ADC
+    bitSet(PRR,PRTWI);      //disable clock to TWI
+    bitSet(PRR,PRTIM2);     //disable clock to timer2
+    bitSet(PRR,PRTIM1);     //disable clock to timer1
+    bitSet(PRR,PRSPI);      //disable clock to SPI
+    bitSet(PRR,PRUSART0);   //disable USART0
+    bitSet(PRR,PRADC);      //shutdown ADC
+    delay(1000);
     wakeUpNow();
 }
 
 void loop() {
-    static unsigned long ulTripTime_ms=0;
     boPinButton.update();
     boPinTrigger.update();
     boPinClearMem.update();
-
+    //someone is cycling
     if(boPinTrigger.fallingEdge()){
+        if(!chrono.isRunning()){
+            chrono.start();
+        }
         word wCycleTime=getCycleTime();
         //Convert [ms/n] to [rpm], also taking into account the 16:39 transfer ratio of the gears.
         word wRpm=(wCycleTime>0?(60000<<4)/wCycleTime/39:0);
-        ulTripTime_ms+=wCycleTime;
-        showLcd(wRpm, ulTripTime_ms/1000);
+        lcdc.showTripData(wRpm, chrono.elapsed());
         ttClearDisplay.start();
         ttClearRPM.start();
     }
+    //someone wants to check the total time of all trips, including this one
     if(boPinButton.fallingEdge()){
-        lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print("Total: ");
-        showFullTime(configuration.ulTotalTime+ulTripTime_ms/1000);
+        lcdc.showTotalTime(configuration.ulTotalTime+chrono.elapsed());
     }
+    //someone wants to clear the data stored in the eeprom
     if(boPinClearMem.fallingEdge()){
-        Serial.println("Clearing EEPROM");
         configuration.ulTotalTime=0;
         EEPROM_writeAnything(0,configuration);
     }
+    //someone is taking a rest while cycling
     if(ttClearRPM.runout()){
-        showLcd(0, ulTripTime_ms/1000);
+        lcdc.showTripData(0, chrono.elapsed());
+        chrono.stop();
         ttClearRPM.start();//to avoid the showLCD being executed every loop after the timeout.
     }
+    //someone has stopped cycling.  Go to sleep
     if(ttClearDisplay.runout()){
         ttClearDisplay.start();
-        lcd.clear();
-        lcd.setCursor(0,0);
-        lcd.print("Tot ziens...");
+        lcdc.goodbye();
         delay(1000);
-        lcd.noDisplay();
-        configuration.ulTotalTime+=ulTripTime_ms/1000;
+        configuration.ulTotalTime+=chrono.elapsed();
         EEPROM_writeAnything(0,configuration);
-        //variables will be restored after sleep.
-        //for the trip time, this is undesired, because the trip is finished when sleeping.
-        ulTripTime_ms=0;
         sleepNow();
     }
 }
 
-void showLcd(word wRpm, unsigned long ulTotalSeconds)
-{  
-    lcd.clear();
-    lcd.setCursor(0,0);
-    lcd.print(wRpm);
-    lcd.setCursor(3,0);
-    lcd.print("rpm");
-    lcd.setCursor(7,0);
-    lcd.print("Tijd:");
-    showFullTime(ulTotalSeconds);
-}
-
-void showFullTime(unsigned long ulSeconds){
-    unsigned long ulTotalHours=ulSeconds/3600;
-    ulSeconds%=3600;
-    if(ulTotalHours>0){
-        lcd.print(ulTotalHours);
-        lcd.print("h");
-    }
-    byte yMinutes=ulSeconds/60;
-    ulSeconds%=60;
-    if(yMinutes>0){
-        lcd.print(yMinutes);
-        lcd.print("m");
-    }
-    lcd.print(ulSeconds);
-    lcd.print("s");
-}
-
-
-//Calculates the duration since last call of this function.
-//Then converts that time difference to a frequency in [rpm]
-//Then takes into account the 39/16-proportion of the cogwheels in the hometrainer.
-//When it has been more than 5s since the last function call , then 0 will be returned.  This is too ignore too slow (<5RPM) cycling.
 unsigned long getCycleTime(){
     static unsigned long ulPreviousTime=0;
     unsigned long result=millis()-ulPreviousTime;
@@ -133,13 +117,16 @@ unsigned long getCycleTime(){
 
 void sleepNow()
 {
+    lcdc.off();
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    sleep_enable();
     attachInterrupt(EXTINT1, wakeUpNow, LOW);
-    sleep_mode();
-    /* wake up here */
+    cli();
+    sleep_enable();
+    sleep_bod_disable();
+    sei();
+    sleep_cpu();
     sleep_disable();
-    detachInterrupt(EXTINT1);
+    sei();
 }
 
 void wakeUpNow()        // here the interrupt is handled after wakeup
@@ -148,10 +135,9 @@ void wakeUpNow()        // here the interrupt is handled after wakeup
     // timers and code using timers (serial.print and more...) will not work here.
     // we don't really need to execute any special functions here, since we
     // just want the thing to wake up
-    lcd.begin(20, 2);
-    lcd.clear();                  // start with a blank screen
-    lcd.setCursor(0,0);           // set cursor to column 0, row 0 (the first row)
-    lcd.print("Hallo Frans!");    // change this text to whatever you like. keep it clean.
+    detachInterrupt(EXTINT1);
+    lcdc.init();
+    chrono.reset();
 }
 
 
