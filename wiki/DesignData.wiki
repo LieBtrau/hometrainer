@@ -11,3 +11,9 @@
  * There's an extra ISP connector on the board because the Arduino Mini can no longer be programmed using its bootloader.  Some fuse settings also need to be changed and that can't be done with the bootloader.
  * [https://drive.google.com/file/d/0B5_mAlpV8IjvdmRJRzhJOWV1aTg/edit?usp=sharing PDF]
  * Unfortunately, this version also has a hardware error.  When the wheel-sensor-switch remains closed after the user stops cycling, the MCU will never go to sleep and hence the batteries will run out soon.  So the level-triggering of the input has been converted to an edge-triggered input.  The patch can easily be done on Version 1.  I built it in like this.
+
+===Version 2===
+ This version solves the issues of the version 1 PCB.
+
+ * [https://drive.google.com/file/d/0B5_mAlpV8IjvM3hTN3dHTHdEWkU/edit?usp=sharing PDF of Bill of Materials]
+ * [https://drive.google.com/file/d/0B5_mAlpV8IjvWEUzSWY2bFpsWFU/edit?usp=sharing PDF of design data]
